@@ -16,7 +16,7 @@ public class RagController {
     }
 
     @GetMapping("/ask")
-    public String getQuery(@RequestParam String query) {
+    public RagResponse getQuery(@RequestParam String query) {
         return ragService.ask(query);
 
     }
