@@ -7,6 +7,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,7 +26,7 @@ public class RagService {
 
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
-    public RagService(VectorStore vectorStore, ChatClient.Builder chatClientBuilder, DocumentTypeDetector documentTypeDetector){
+    public RagService(VectorStore vectorStore, @Lazy ChatClient.Builder chatClientBuilder, DocumentTypeDetector documentTypeDetector){
         this.vectorStore = vectorStore;
         this.chatClient = chatClientBuilder.build();
         this.documentTypeDetector = documentTypeDetector;
