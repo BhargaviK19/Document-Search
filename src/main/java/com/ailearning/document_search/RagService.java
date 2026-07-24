@@ -1,12 +1,13 @@
 package com.ailearning.document_search;
 
-
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -35,35 +36,36 @@ public class RagService {
 
        String documentType = documentTypeDetector.detect(query);
 
-       SearchRequest searchRequest;
+       VectorStoreDocumentRetriever.Builder retrieverBuilder = VectorStoreDocumentRetriever.builder()
+               .vectorStore(vectorStore)
+               .topK(3)
+               .similarityThreshold(0.5);
 
        if (documentType != null ) {
            log.info("Filtering search to document type: {}", documentType);
-           searchRequest = SearchRequest.builder()
-                   .query(query)
-                   .topK(3)
-                   .similarityThreshold(0.5)
-                   .filterExpression("type == '" + documentType + "'")
-                   .build();
+           retrieverBuilder.filterExpression(
+                   new FilterExpressionBuilder().eq("type", documentType).build()
+           );
        } else {
            log.info("No specific document type detected, searching all documents");
-           searchRequest = SearchRequest.builder()
-                   .query(query)
-                   .topK(3)
-                   .similarityThreshold(0.5)
-                   .build();
        }
 
-       List<Document> documents = vectorStore.similaritySearch(searchRequest);
+       RetrievalAugmentationAdvisor ragAdvisor = RetrievalAugmentationAdvisor.builder()
+               .documentRetriever(retrieverBuilder.build())
+               .build();
 
-        //This takes each document, gets just the text, and joins them all together with a blank line btw each chunk
-
-        String context = documents.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n"));
+        // Get sources separately for citations
+        List<Document> docsForCitations = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(query)
+                        .topK(3)
+                        .similarityThreshold(0.5)
+                        .build()
+        );
 
         //Extract sources from retrieved documents
-        List<String> sources = documents.stream()
+        List<String> sources = docsForCitations == null ? List.of() :
+                docsForCitations.stream()
                 .map(doc -> (String) doc.getMetadata().get("source"))
                 .distinct()
                 .collect(Collectors.toList());
@@ -75,9 +77,8 @@ public class RagService {
             You are a helpful financial assistant.
             Answer the question using only the context provided below.
             If the answer is not in the context, say "I don't have that information."
-            
-            Context:
-            """ + context)
+            """)
+                .advisors(ragAdvisor)
                 .user(query)
                 .call()
                 .content();
